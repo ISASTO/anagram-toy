@@ -1,22 +1,49 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Anagram Board</title>
   <style>
     :root {
-      --bg: #f4efe3;
-      --paper: #fffaf0;
-      --ink: #1e1b18;
-      --muted: #6e665d;
-      --line: #d8cbbb;
+      color-scheme: dark;
+      --bg: #11100f;
+      --paper: rgba(27, 25, 22, .94);
+      --control: #211e1a;
+      --control-hover: #2b2722;
+      --ink: #f4efe3;
+      --muted: #aaa197;
+      --line: #3d3730;
+      --board-line: #554b3e;
+      --board-stripe: rgba(255,255,255,.035);
+      --glow: rgba(255,255,255,.035);
+      --empty: #81786e;
       --tile: #f5d997;
       --tile-edge: #bd9a55;
       --tile-shadow: #987943;
+      --accent: #68a38f;
+      --accent-2: #79b39f;
+      --focus: rgba(104,163,143,.24);
+      --primary-text: #101714;
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4efe3;
+      --paper: rgba(255,250,240,.88);
+      --control: #fffdf7;
+      --control-hover: #f7f0e2;
+      --ink: #1e1b18;
+      --muted: #6e665d;
+      --line: #d8cbbb;
+      --board-line: #cbbb9f;
+      --board-stripe: rgba(117,89,56,.035);
+      --glow: rgba(255,255,255,.55);
+      --empty: #8a8177;
       --accent: #2e5d50;
       --accent-2: #20453b;
-      --danger: #8b3d35;
+      --focus: rgba(46,93,80,.16);
+      --primary-text: #ffffff;
     }
 
     * { box-sizing: border-box; }
@@ -25,7 +52,7 @@
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(circle at 15% 10%, rgba(255,255,255,.55), transparent 28rem),
+        radial-gradient(circle at 15% 10%, var(--glow), transparent 28rem),
         var(--bg);
       color: var(--ink);
       font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -45,6 +72,11 @@
       margin-bottom: 24px;
     }
 
+    .theme-toggle {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
     h1 {
       margin: 0;
       font-size: clamp(2rem, 5vw, 4rem);
@@ -61,7 +93,7 @@
     }
 
     .panel {
-      background: rgba(255,250,240,.84);
+      background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 18px;
@@ -81,7 +113,7 @@
       resize: vertical;
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: #fffdf7;
+      background: var(--control);
       color: var(--ink);
       padding: 14px 15px;
       font: inherit;
@@ -91,14 +123,14 @@
 
     textarea:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(46,93,80,.12);
+      box-shadow: 0 0 0 3px var(--focus);
     }
 
     button {
       min-height: 44px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: #fffdf7;
+      background: var(--control);
       color: var(--ink);
       padding: 0 14px;
       font: inherit;
@@ -106,12 +138,12 @@
       cursor: pointer;
     }
 
-    button:hover { background: #f7f0e2; }
-    button:focus-visible { outline: 3px solid rgba(46,93,80,.3); outline-offset: 2px; }
+    button:hover { background: var(--control-hover); }
+    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
     .primary {
       background: var(--accent);
-      color: white;
+      color: var(--primary-text);
       border-color: var(--accent);
       padding-inline: 20px;
     }
@@ -157,14 +189,14 @@
     .board-shell {
       position: relative;
       min-height: 330px;
-      border: 2px dashed #cbbb9f;
+      border: 2px dashed var(--board-line);
       border-radius: 18px;
       background:
-        linear-gradient(rgba(255,255,255,.16), rgba(255,255,255,.16)),
+        linear-gradient(var(--glow), var(--glow)),
         repeating-linear-gradient(
           0deg,
-          rgba(117,89,56,.035) 0,
-          rgba(117,89,56,.035) 1px,
+          var(--board-stripe) 0,
+          var(--board-stripe) 1px,
           transparent 1px,
           transparent 33px
         );
@@ -183,7 +215,7 @@
     .empty {
       width: 100%;
       text-align: center;
-      color: #8a8177;
+      color: var(--empty);
       font-family: system-ui, sans-serif;
       padding: 98px 20px;
       pointer-events: none;
@@ -243,6 +275,7 @@
 
     @media (max-width: 700px) {
       header { align-items: start; flex-direction: column; }
+      .theme-toggle { align-self: flex-start; }
       form { grid-template-columns: 1fr; }
       .primary { width: 100%; }
       .status { width: 100%; margin-left: 0; }
@@ -265,6 +298,7 @@
         <h1>ANAGRAM BOARD</h1>
         <p class="sub">A manual word-scrambling workbench. Give it text, get tiles, and move them around yourself. No automatic anagram solving.</p>
       </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Light mode</button>
     </header>
 
     <section class="panel" aria-labelledby="input-label">
@@ -313,6 +347,25 @@
       const resetBtn = document.getElementById('reset');
       const reverseBtn = document.getElementById('reverse');
       const clearBtn = document.getElementById('clear');
+      const themeToggle = document.getElementById('theme-toggle');
+
+      function setTheme(theme, persist = true) {
+        const next = theme === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        themeToggle.textContent = next === 'dark' ? 'Light mode' : 'Dark mode';
+        themeToggle.setAttribute('aria-pressed', String(next === 'light'));
+        if (persist) {
+          try { localStorage.setItem('anagram-theme', next); } catch (_) {}
+        }
+      }
+
+      let savedTheme = null;
+      try { savedTheme = localStorage.getItem('anagram-theme'); } catch (_) {}
+      setTheme(savedTheme === 'light' ? 'light' : 'dark', false);
+
+      themeToggle.addEventListener('click', () => {
+        setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+      });
 
       let tiles = [];
       let nextId = 1;
