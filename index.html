@@ -138,8 +138,8 @@
       cursor: pointer;
     }
 
-    button:hover { background: var(--control-hover); }
-    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    button:not(.tile):hover { background: var(--control-hover); }
+    button:not(.tile):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
     .primary {
       background: var(--accent);
@@ -246,6 +246,27 @@
       touch-action: none;
       will-change: transform;
       transition: box-shadow 70ms ease;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .tile:hover,
+    .tile:focus,
+    .tile:focus-visible,
+    .tile:active {
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.34), transparent 46%),
+        var(--tile);
+      color: #2c2418;
+    }
+
+    .tile:focus-visible {
+      outline: 3px solid #f0cf7f;
+      outline-offset: 3px;
+      box-shadow:
+        0 3px 0 var(--tile-shadow),
+        0 0 0 4px rgba(240,207,127,.16),
+        0 8px 14px rgba(71,50,22,.22);
     }
 
     .tile::after {
