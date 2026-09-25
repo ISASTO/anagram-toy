@@ -152,6 +152,26 @@
       margin: 18px 0 10px;
     }
 
+    .snap-toggle {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      color: var(--muted);
+      font-size: .9rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .snap-toggle input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .status {
       margin-left: auto;
       color: var(--muted);
@@ -323,6 +343,10 @@
         <button id="shuffle" type="button">Shuffle</button>
         <button id="reset" type="button">Reset layout</button>
         <button id="clear" type="button">Clear</button>
+        <label class="snap-toggle">
+          <input id="snap-grid" type="checkbox">
+          <span>Snap to grid</span>
+        </label>
         <span class="status" id="status" aria-live="polite">0 tiles</span>
       </div>
 
@@ -342,6 +366,7 @@
       const shuffleBtn = document.getElementById('shuffle');
       const resetBtn = document.getElementById('reset');
       const clearBtn = document.getElementById('clear');
+      const snapGrid = document.getElementById('snap-grid');
       const themeToggle = document.getElementById('theme-toggle');
 
       function setTheme(theme, persist = true) {
@@ -362,6 +387,14 @@
         setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
       });
 
+      try {
+        snapGrid.checked = localStorage.getItem('anagram-snap-grid') === 'true';
+      } catch (_) {}
+
+      snapGrid.addEventListener('change', () => {
+        try { localStorage.setItem('anagram-snap-grid', String(snapGrid.checked)); } catch (_) {}
+      });
+
       let tiles = [];
       let nextId = 1;
       let activeDrag = null;
@@ -376,6 +409,10 @@
 
       function tileSize() {
         return window.matchMedia('(max-width: 700px)').matches ? 52 : 58;
+      }
+
+      function gridSize() {
+        return 10;
       }
 
       function boardBounds() {
@@ -649,8 +686,18 @@
 
         const rawDx = e.clientX - activeDrag.startClientX;
         const rawDy = e.clientY - activeDrag.startClientY;
-        const dx = Math.max(activeDrag.minDx, Math.min(rawDx, activeDrag.maxDx));
-        const dy = Math.max(activeDrag.minDy, Math.min(rawDy, activeDrag.maxDy));
+        let desiredDx = rawDx;
+        let desiredDy = rawDy;
+
+        if (snapGrid.checked) {
+          const anchor = activeDrag.initialPositions.get(activeDrag.id);
+          const grid = gridSize();
+          desiredDx = Math.round((anchor.x + rawDx) / grid) * grid - anchor.x;
+          desiredDy = Math.round((anchor.y + rawDy) / grid) * grid - anchor.y;
+        }
+
+        const dx = Math.max(activeDrag.minDx, Math.min(desiredDx, activeDrag.maxDx));
+        const dy = Math.max(activeDrag.minDy, Math.min(desiredDy, activeDrag.maxDy));
 
         activeDrag.initialPositions.forEach((start, id) => {
           const item = tiles.find(t => t.id === id);
