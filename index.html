@@ -144,28 +144,6 @@
 
     .primary:hover { background: var(--accent-2); }
 
-    .options {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-top: 12px;
-      color: var(--muted);
-      font-family: system-ui, sans-serif;
-      font-size: .93rem;
-    }
-
-    .check {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .check input {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--accent);
-    }
-
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -341,16 +319,9 @@
         <button class="primary" type="submit">Make tiles</button>
       </form>
 
-      <div class="options">
-        <label class="check"><input id="keep-spaces" type="checkbox"> Keep spaces as tiles</label>
-        <label class="check"><input id="keep-punctuation" type="checkbox"> Keep punctuation</label>
-        <label class="check"><input id="preserve-case" type="checkbox"> Preserve case</label>
-      </div>
-
       <div class="toolbar">
         <button id="shuffle" type="button">Shuffle</button>
         <button id="reset" type="button">Reset layout</button>
-        <button id="reverse" type="button">Reverse</button>
         <button id="clear" type="button">Clear</button>
         <span class="status" id="status" aria-live="polite">0 tiles</span>
       </div>
@@ -368,12 +339,8 @@
       const source = document.getElementById('source');
       const board = document.getElementById('board');
       const status = document.getElementById('status');
-      const keepSpaces = document.getElementById('keep-spaces');
-      const keepPunctuation = document.getElementById('keep-punctuation');
-      const preserveCase = document.getElementById('preserve-case');
       const shuffleBtn = document.getElementById('shuffle');
       const resetBtn = document.getElementById('reset');
-      const reverseBtn = document.getElementById('reverse');
       const clearBtn = document.getElementById('clear');
       const themeToggle = document.getElementById('theme-toggle');
 
@@ -402,20 +369,9 @@
       let selectedIds = new Set();
 
       function parseInput(text) {
-        const chars = Array.from(text);
-        const result = [];
-        for (const ch of chars) {
-          if (ch === ' ' || ch === '\n' || ch === '\t') {
-            if (keepSpaces.checked) result.push('␠');
-            continue;
-          }
-          if (/[\p{L}\p{N}]/u.test(ch)) {
-            result.push(preserveCase.checked ? ch : ch.toUpperCase());
-            continue;
-          }
-          if (keepPunctuation.checked) result.push(ch);
-        }
-        return result;
+        return Array.from(text)
+          .filter(ch => /[\p{L}\p{N}]/u.test(ch))
+          .map(ch => ch.toUpperCase());
       }
 
       function tileSize() {
@@ -756,17 +712,6 @@
 
       resetBtn.addEventListener('click', () => {
         selectedIds.clear();
-        const positions = neatPositions(tiles.length);
-        tiles.forEach((t, i) => {
-          t.x = positions[i].x;
-          t.y = positions[i].y;
-        });
-        render();
-      });
-
-      reverseBtn.addEventListener('click', () => {
-        selectedIds.clear();
-        tiles.reverse();
         const positions = neatPositions(tiles.length);
         tiles.forEach((t, i) => {
           t.x = positions[i].x;
