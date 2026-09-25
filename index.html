@@ -24,6 +24,7 @@
       --accent: #68a38f;
       --accent-2: #79b39f;
       --focus: rgba(104,163,143,.24);
+      --selection-fill: rgba(104,163,143,.16);
       --primary-text: #101714;
     }
 
@@ -43,6 +44,7 @@
       --accent: #2e5d50;
       --accent-2: #20453b;
       --focus: rgba(46,93,80,.16);
+      --selection-fill: rgba(46,93,80,.12);
       --primary-text: #ffffff;
     }
 
@@ -280,12 +282,35 @@
       opacity: .42;
     }
 
-    .tile.dragging {
+    .tile.selected {
+      outline: 3px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .tile.selected:focus-visible {
+      outline-color: var(--accent);
+      box-shadow:
+        0 3px 0 var(--tile-shadow),
+        0 0 0 4px var(--focus),
+        0 8px 14px rgba(71,50,22,.22);
+    }
+
+    .tile.dragging,
+    .tile.group-dragging {
       cursor: grabbing;
       z-index: 1000;
       box-shadow:
         0 4px 0 var(--tile-shadow),
         0 10px 18px rgba(71,50,22,.24);
+    }
+
+    .selection-box {
+      position: absolute;
+      z-index: 2000;
+      pointer-events: none;
+      border: 2px solid var(--accent);
+      border-radius: 5px;
+      background: var(--selection-fill);
     }
 
     .kbd-help {
@@ -350,7 +375,7 @@
       </div>
 
       <p class="kbd-help">
-        Pick up any tile and drag it anywhere on the board. Tiles stay exactly where you drop them. Use <strong>Shuffle</strong> to scatter them and <strong>Reset layout</strong> to put them back in a neat row.
+        Drag on empty board space to box-select multiple tiles, then drag any selected tile to move the whole group. Click empty space to clear the selection. Individual tiles still move freely.
       </p>
     </section>
   </main>
@@ -391,6 +416,8 @@
       let tiles = [];
       let nextId = 1;
       let activeDrag = null;
+      let activeSelection = null;
+      let selectedIds = new Set();
 
       function parseInput(text) {
         const chars = Array.from(text);
@@ -495,9 +522,95 @@
       }
 
       function setStatus(message) {
-        status.textContent = message || `${tiles.length} tile${tiles.length === 1 ? '' : 's'}`;
+        if (message) {
+          status.textContent = message;
+          return;
+        }
+
+        const tileLabel = `${tiles.length} tile${tiles.length === 1 ? '' : 's'}`;
+        const selectedLabel = selectedIds.size ? ` • ${selectedIds.size} selected` : '';
+        status.textContent = tileLabel + selectedLabel;
       }
 
+
+      function syncSelectionClasses() {
+        board.querySelectorAll('.tile').forEach(el => {
+          el.classList.toggle('selected', selectedIds.has(Number(el.dataset.id)));
+        });
+        setStatus();
+      }
+
+      function boardPoint(e) {
+        const rect = board.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.min(e.clientX - rect.left, rect.width)),
+          y: Math.max(0, Math.min(e.clientY - rect.top, rect.height))
+        };
+      }
+
+      function startSelection(e) {
+        if (e.target !== board) return;
+        if (e.button !== 0 && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+
+        e.preventDefault();
+        const start = boardPoint(e);
+        selectedIds.clear();
+        syncSelectionClasses();
+
+        const box = document.createElement('div');
+        box.className = 'selection-box';
+        box.style.left = `${start.x}px`;
+        box.style.top = `${start.y}px`;
+        box.style.width = '0px';
+        box.style.height = '0px';
+        board.appendChild(box);
+
+        activeSelection = {
+          pointerId: e.pointerId,
+          startX: start.x,
+          startY: start.y,
+          box
+        };
+
+        board.setPointerCapture?.(e.pointerId);
+      }
+
+      function moveSelection(e) {
+        if (!activeSelection || e.pointerId !== activeSelection.pointerId) return;
+
+        const point = boardPoint(e);
+        const left = Math.min(activeSelection.startX, point.x);
+        const top = Math.min(activeSelection.startY, point.y);
+        const right = Math.max(activeSelection.startX, point.x);
+        const bottom = Math.max(activeSelection.startY, point.y);
+
+        activeSelection.box.style.left = `${left}px`;
+        activeSelection.box.style.top = `${top}px`;
+        activeSelection.box.style.width = `${right - left}px`;
+        activeSelection.box.style.height = `${bottom - top}px`;
+
+        const size = tileSize();
+        selectedIds = new Set(
+          tiles
+            .filter(t =>
+              t.x < right &&
+              t.x + size > left &&
+              t.y < bottom &&
+              t.y + size > top
+            )
+            .map(t => t.id)
+        );
+
+        syncSelectionClasses();
+      }
+
+      function endSelection(e) {
+        if (!activeSelection || e.pointerId !== activeSelection.pointerId) return;
+        activeSelection.box.remove();
+        activeSelection = null;
+        board.releasePointerCapture?.(e.pointerId);
+        syncSelectionClasses();
+      }
       function render() {
         board.replaceChildren();
 
@@ -514,6 +627,7 @@
           const tile = document.createElement('button');
           tile.type = 'button';
           tile.className = 'tile';
+          if (selectedIds.has(item.id)) tile.classList.add('selected');
           tile.dataset.id = String(item.id);
           tile.dataset.index = String(idx + 1);
           tile.setAttribute('aria-label', `Tile ${idx + 1}: ${item.char === '␠' ? 'space' : item.char}`);
@@ -536,14 +650,36 @@
 
         e.preventDefault();
 
-        const boardRect = board.getBoundingClientRect();
+        if (!selectedIds.has(id)) {
+          selectedIds = new Set([id]);
+          syncSelectionClasses();
+        }
+
+        const movingTiles = tiles.filter(t => selectedIds.has(t.id));
+        const size = tileSize();
+        const b = boardBounds();
+        const minX = Math.min(...movingTiles.map(t => t.x));
+        const minY = Math.min(...movingTiles.map(t => t.y));
+        const maxRight = Math.max(...movingTiles.map(t => t.x + size));
+        const maxBottom = Math.max(...movingTiles.map(t => t.y + size));
+
         activeDrag = {
           id,
           pointerId: e.pointerId,
-          offsetX: e.clientX - boardRect.left - item.x,
-          offsetY: e.clientY - boardRect.top - item.y
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          minDx: -minX,
+          maxDx: b.width - maxRight,
+          minDy: -minY,
+          maxDy: b.height - maxBottom,
+          initialPositions: new Map(
+            movingTiles.map(t => [t.id, { x: t.x, y: t.y }])
+          )
         };
 
+        board.querySelectorAll('.tile.selected').forEach(tileEl => {
+          tileEl.classList.add('group-dragging');
+        });
         el.classList.add('dragging');
         el.setPointerCapture?.(e.pointerId);
 
@@ -564,28 +700,31 @@
       function moveDrag(e) {
         if (!activeDrag || e.pointerId !== activeDrag.pointerId) return;
 
-        const item = tiles.find(t => t.id === activeDrag.id);
-        const el = board.querySelector(`[data-id="${activeDrag.id}"]`);
-        if (!item || !el) return;
+        const rawDx = e.clientX - activeDrag.startClientX;
+        const rawDy = e.clientY - activeDrag.startClientY;
+        const dx = Math.max(activeDrag.minDx, Math.min(rawDx, activeDrag.maxDx));
+        const dy = Math.max(activeDrag.minDy, Math.min(rawDy, activeDrag.maxDy));
 
-        const rect = board.getBoundingClientRect();
-        const next = clampPosition(
-          e.clientX - rect.left - activeDrag.offsetX,
-          e.clientY - rect.top - activeDrag.offsetY
-        );
+        activeDrag.initialPositions.forEach((start, id) => {
+          const item = tiles.find(t => t.id === id);
+          const el = board.querySelector(`[data-id="${id}"]`);
+          if (!item || !el) return;
 
-        item.x = next.x;
-        item.y = next.y;
-        el.style.transform = `translate3d(${item.x}px, ${item.y}px, 0)`;
+          item.x = start.x + dx;
+          item.y = start.y + dy;
+          el.style.transform = `translate3d(${item.x}px, ${item.y}px, 0)`;
+        });
       }
 
       function endDrag(e) {
         if (!activeDrag || e.pointerId !== activeDrag.pointerId) return;
 
-        const el = board.querySelector(`[data-id="${activeDrag.id}"]`);
         activeDrag.cleanup?.();
-        el?.classList.remove('dragging');
+        board.querySelectorAll('.tile.group-dragging, .tile.dragging').forEach(el => {
+          el.classList.remove('group-dragging', 'dragging');
+        });
         activeDrag = null;
+        syncSelectionClasses();
       }
 
       function makeFromInput() {
@@ -596,6 +735,7 @@
           setStatus('Enter at least one letter or number.');
           return;
         }
+        selectedIds.clear();
         tiles = makeTiles(parsed);
         render();
       }
@@ -606,6 +746,7 @@
       });
 
       shuffleBtn.addEventListener('click', () => {
+        selectedIds.clear();
         const positions = randomNonOverlappingPositions(tiles.length);
         tiles.forEach((t, i) => {
           t.x = positions[i].x;
@@ -615,6 +756,7 @@
       });
 
       resetBtn.addEventListener('click', () => {
+        selectedIds.clear();
         const positions = neatPositions(tiles.length);
         tiles.forEach((t, i) => {
           t.x = positions[i].x;
@@ -624,6 +766,7 @@
       });
 
       reverseBtn.addEventListener('click', () => {
+        selectedIds.clear();
         tiles.reverse();
         const positions = neatPositions(tiles.length);
         tiles.forEach((t, i) => {
@@ -635,10 +778,16 @@
 
       clearBtn.addEventListener('click', () => {
         source.value = '';
+        selectedIds.clear();
         tiles = [];
         render();
         source.focus();
       });
+
+      board.addEventListener('pointerdown', startSelection);
+      board.addEventListener('pointermove', moveSelection);
+      board.addEventListener('pointerup', endSelection);
+      board.addEventListener('pointercancel', endSelection);
 
       let resizeTimer;
       window.addEventListener('resize', () => {
