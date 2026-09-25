@@ -86,14 +86,6 @@
       letter-spacing: -0.06em;
     }
 
-    .sub {
-      max-width: 570px;
-      color: var(--muted);
-      line-height: 1.5;
-      margin: 8px 0 0;
-      font-family: system-ui, sans-serif;
-    }
-
     .panel {
       background: var(--paper);
       border: 1px solid var(--line);
@@ -313,12 +305,6 @@
       background: var(--selection-fill);
     }
 
-    .kbd-help {
-      margin: 12px 2px 0;
-      color: var(--muted);
-      font: .86rem/1.45 system-ui, sans-serif;
-    }
-
     @media (max-width: 700px) {
       header { align-items: start; flex-direction: column; }
       .theme-toggle { align-self: flex-start; }
@@ -342,7 +328,6 @@
     <header>
       <div>
         <h1>ANAGRAM BOARD</h1>
-        <p class="sub">A manual word-scrambling workbench. Give it text, get tiles, and move them around yourself. No automatic anagram solving.</p>
       </div>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Light mode</button>
     </header>
@@ -374,9 +359,6 @@
         <div id="board" class="board" aria-label="Anagram tile board"></div>
       </div>
 
-      <p class="kbd-help">
-        Drag on empty board space to box-select multiple tiles, then drag any selected tile to move the whole group. Click empty space to clear the selection. Individual tiles still move freely.
-      </p>
     </section>
   </main>
 
@@ -650,12 +632,17 @@
 
         e.preventDefault();
 
-        if (!selectedIds.has(id)) {
-          selectedIds = new Set([id]);
+        const isGroupDrag = selectedIds.size > 1 && selectedIds.has(id);
+
+        if (!isGroupDrag && selectedIds.size) {
+          selectedIds.clear();
           syncSelectionClasses();
         }
 
-        const movingTiles = tiles.filter(t => selectedIds.has(t.id));
+        const movingTiles = isGroupDrag
+          ? tiles.filter(t => selectedIds.has(t.id))
+          : [item];
+
         const size = tileSize();
         const b = boardBounds();
         const minX = Math.min(...movingTiles.map(t => t.x));
@@ -666,6 +653,7 @@
         activeDrag = {
           id,
           pointerId: e.pointerId,
+          isGroupDrag,
           startClientX: e.clientX,
           startClientY: e.clientY,
           minDx: -minX,
@@ -677,9 +665,12 @@
           )
         };
 
-        board.querySelectorAll('.tile.selected').forEach(tileEl => {
-          tileEl.classList.add('group-dragging');
-        });
+        if (isGroupDrag) {
+          board.querySelectorAll('.tile.selected').forEach(tileEl => {
+            tileEl.classList.add('group-dragging');
+          });
+        }
+
         el.classList.add('dragging');
         el.setPointerCapture?.(e.pointerId);
 
@@ -719,11 +710,19 @@
       function endDrag(e) {
         if (!activeDrag || e.pointerId !== activeDrag.pointerId) return;
 
+        const wasGroupDrag = activeDrag.isGroupDrag;
         activeDrag.cleanup?.();
+
         board.querySelectorAll('.tile.group-dragging, .tile.dragging').forEach(el => {
           el.classList.remove('group-dragging', 'dragging');
         });
+
         activeDrag = null;
+
+        if (wasGroupDrag) {
+          selectedIds.clear();
+        }
+
         syncSelectionClasses();
       }
 
