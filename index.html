@@ -440,6 +440,50 @@
         }));
       }
 
+      function randomNonOverlappingPositions(count) {
+        const b = boardBounds();
+        const size = b.size;
+        const gap = 8;
+        const positions = [];
+        const maxX = Math.max(0, b.width - size);
+        const maxY = Math.max(0, b.height - size);
+
+        function overlapsAny(x, y) {
+          return positions.some(p =>
+            x < p.x + size + gap &&
+            x + size + gap > p.x &&
+            y < p.y + size + gap &&
+            y + size + gap > p.y
+          );
+        }
+
+        for (let i = 0; i < count; i++) {
+          let placed = false;
+
+          for (let attempt = 0; attempt < 800; attempt++) {
+            const x = Math.random() * maxX;
+            const y = Math.random() * maxY;
+
+            if (!overlapsAny(x, y)) {
+              positions.push({ x, y });
+              placed = true;
+              break;
+            }
+          }
+
+          if (!placed) {
+            const fallback = neatPositions(count);
+            for (let j = fallback.length - 1; j > 0; j--) {
+              const k = Math.floor(Math.random() * (j + 1));
+              [fallback[j], fallback[k]] = [fallback[k], fallback[j]];
+            }
+            return fallback;
+          }
+        }
+
+        return positions;
+      }
+
       function makeTiles(chars) {
         const positions = neatPositions(chars.length);
         return chars.map((char, i) => ({
@@ -562,10 +606,10 @@
       });
 
       shuffleBtn.addEventListener('click', () => {
-        const b = boardBounds();
-        tiles.forEach(t => {
-          t.x = Math.random() * Math.max(0, b.width - b.size);
-          t.y = Math.random() * Math.max(0, b.height - b.size);
+        const positions = randomNonOverlappingPositions(tiles.length);
+        tiles.forEach((t, i) => {
+          t.x = positions[i].x;
+          t.y = positions[i].y;
         });
         render();
       });
